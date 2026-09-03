@@ -21,14 +21,18 @@ const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || 'your-app-password'
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
   port: 587,
-  secure: false, // ใช้ false สำหรับ Port 587
+  secure: false, // Port 587 ต้องตั้งค่า secure เป็น false
   auth: {
     user: GMAIL_USER,
     pass: GMAIL_APP_PASSWORD
   },
   tls: {
     rejectUnauthorized: false
-  }
+  },
+  family: 4, // บังคับใช้ IPv4 แก้ปัญหา Render ติด Timeout จาก IPv6
+  connectionTimeout: 15000, // ขยายเวลาเชื่อมต่อเป็น 15 วินาที
+  greetingTimeout: 15000,
+  socketTimeout: 15000
 });
 
 // ข้อมูลสถานะตู้ในระบบ
