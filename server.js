@@ -1,19 +1,20 @@
 const express = require('express');
 const cors = require('cors');
 const Stripe = require('stripe');
-const nodemailer = require('nodemailer'); // เปลี่ยนจาก Resend เป็น Nodemailer
+const nodemailer = require('nodemailer');
 
 const app = express();
 
 // --- Configuration ---
 const RATE_PER_MINUTE = 1;
 const MINIMUM_PRICE = 10;
-const SERVER_URL = process.env.SERVER_URL || 'https://project32-6fek.onrender.com';
+// อัปเดต URL เป็น newproject32 เรียบร้อยแล้ว
+const SERVER_URL = process.env.SERVER_URL || 'https://newproject32.onrender.com';
 
 // Stripe Config
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_your_stripe_secret_key');
 
-// Nodemailer Config (ใช้งาน Gmail SMTP ฟรี ไม่ต้องมีโดเมน)
+// Nodemailer Config (ใช้งาน Gmail SMTP ผ่าน Port 465 SSL)
 const GMAIL_USER = process.env.GMAIL_USER || 'your-email@gmail.com';
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || 'your-app-password';
 
@@ -26,7 +27,7 @@ const transporter = nodemailer.createTransport({
     pass: GMAIL_APP_PASSWORD
   },
   tls: {
-    rejectUnauthorized: false // ป้องกันปัญหา SSL Certificate บน Cloud Hosting
+    rejectUnauthorized: false
   }
 });
 
@@ -87,7 +88,7 @@ app.use(express.urlencoded({ extended: true }));
 // ============================================================
 
 app.get('/', (req, res) => {
-  res.send('Smart Locker Backend running with Nodemailer (Gmail SMTP)!');
+  res.send('Smart Locker Backend (newproject32) running with Nodemailer!');
 });
 
 app.get('/api/lockers', (req, res) => {
