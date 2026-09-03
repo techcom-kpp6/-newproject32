@@ -1,39 +1,36 @@
 const express = require('express');
 const cors = require('cors');
 const Stripe = require('stripe');
-const nodemailer = require('nodemailer');
 
 const app = express();
 
 // --- Configuration ---
 const RATE_PER_MINUTE = 1;
 const MINIMUM_PRICE = 10;
-// อัปเดต URL เป็น newproject32 เรียบร้อยแล้ว
 const SERVER_URL = process.env.SERVER_URL || 'https://newproject32.onrender.com';
 
 // Stripe Config
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_your_stripe_secret_key');
 
-// Nodemailer Config (ใช้งาน Gmail SMTP ผ่าน Port 465 SSL)
-const GMAIL_USER = process.env.GMAIL_USER || 'your-email@gmail.com';
-const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || 'your-app-password';
+// Google Apps Script Config (ใช้ส่งอีเมลผ่าน HTTPS Port 443 เพื่อแก้ปัญหา Timeout)
+const MAIL_SCRIPT_URL = process.env.MAIL_SCRIPT_URL || 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL';
 
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false, // Port 587 ต้องตั้งค่า secure เป็น false
-  auth: {
-    user: GMAIL_USER,
-    pass: GMAIL_APP_PASSWORD
-  },
-  tls: {
-    rejectUnauthorized: false
-  },
-  family: 4, // บังคับใช้ IPv4 แก้ปัญหา Render ติด Timeout จาก IPv6
-  connectionTimeout: 15000, // ขยายเวลาเชื่อมต่อเป็น 15 วินาที
-  greetingTimeout: 15000,
-  socketTimeout: 15000
-});
+// ฟังก์ชันสำหรับส่งอีเมลผ่าน Google Apps Script
+async function sendEmail(to, subject, html) {
+  try {
+    const response = await fetch(MAIL_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to, subject, html })
+    });
+    const result = await response.json();
+    console.log(`[GAS EMAIL SUCCESS] Sent to ${to}:`, result);
+    return true;
+  } catch (error) {
+    console.error('[GAS EMAIL ERROR]', error.message);
+    return false;
+  }
+}
 
 // ข้อมูลสถานะตู้ในระบบ
 const lockers = {
@@ -92,7 +89,7 @@ app.use(express.urlencoded({ extended: true }));
 // ============================================================
 
 app.get('/', (req, res) => {
-  res.send('Smart Locker Backend (newproject32) running with Nodemailer!');
+  res.send('Smart Locker Backend (newproject32) running with Google Apps Script Mailer!');
 });
 
 app.get('/api/lockers', (req, res) => {
@@ -144,7 +141,7 @@ app.get('/form', (req, res) => {
   `);
 });
 
-// --- ฝากของ และ ส่งอีเมลยืนยัน PIN ผ่าน Nodemailer ---
+// --- ฝากของ และ ส่งอีเมลยืนยัน PIN ผ่าน Google Apps Script ---
 app.post('/submit-deposit', async (req, res) => {
   const { lockerId, email, pin } = req.body;
 
@@ -162,25 +159,19 @@ app.post('/submit-deposit', async (req, res) => {
 
   console.log(`[WEB DEPOSIT] Locker ${lockerId} locked via Mobile QR. Email: ${email}, PIN: ${pin}`);
 
-  try {
-    await transporter.sendMail({
-      from: `"Smart Locker System" <${GMAIL_USER}>`,
-      to: email,
-      subject: `Deposit Confirmed - Locker #${lockerId}`,
-      html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px;">
-          <h2>Locker Deposit Successful</h2>
-          <p>You have successfully stored your items in Locker <b>#${lockerId}</b>.</p>
-          <p>Your 6-digit PIN code for retrieval is:</p>
-          <h1 style="color: #2563eb; letter-spacing: 5px; font-size: 36px;">${pin}</h1>
-          <p>Please keep this code safe. You will need it to retrieve your items.</p>
-        </div>
-      `
-    });
-    console.log(`[NODEMAILER SUCCESS] Confirmation email sent to ${email}`);
-  } catch (error) {
-    console.error('[NODEMAILER ERROR]', error.message);
-  }
+  const subject = `Deposit Confirmed - Locker #${lockerId}`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; padding: 20px;">
+      <h2>Locker Deposit Successful</h2>
+      <p>You have successfully stored your items in Locker <b>#${lockerId}</b>.</p>
+      <p>Your 6-digit PIN code for retrieval is:</p>
+      <h1 style="color: #2563eb; letter-spacing: 5px; font-size: 36px;">${pin}</h1>
+      <p>Please keep this code safe. You will need it to retrieve your items.</p>
+    </div>
+  `;
+
+  // เรียกใช้ฟังก์ชันส่งอีเมล
+  await sendEmail(email, subject, html);
 
   res.send(`
     <!DOCTYPE html>
@@ -237,7 +228,7 @@ app.post('/api/retrieve', async (req, res) => {
   }
 });
 
-// --- ส่ง OTP / PIN ใหม่ผ่าน Nodemailer ---
+// --- ส่ง OTP / PIN ใหม่ผ่าน Google Apps Script ---
 app.post('/api/send-otp', async (req, res) => {
   const { lockerId } = req.body;
   const locker = lockers[lockerId];
@@ -248,25 +239,22 @@ app.post('/api/send-otp', async (req, res) => {
   const newPin = Math.floor(100000 + Math.random() * 900000).toString();
   locker.pin = newPin;
 
-  try {
-    await transporter.sendMail({
-      from: `"Smart Locker System" <${GMAIL_USER}>`,
-      to: locker.customerEmail,
-      subject: `Your New Unlock Code for Locker #${lockerId}`,
-      html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px;">
-          <h2>Smart Locker OTP Code</h2>
-          <p>Your new 6-digit PIN code to unlock Locker <b>#${lockerId}</b> is:</p>
-          <h1 style="color: #2563eb; letter-spacing: 5px; font-size: 36px;">${newPin}</h1>
-          <p>Please enter this code on the locker screen to retrieve your items.</p>
-        </div>
-      `
-    });
+  const subject = `Your New Unlock Code for Locker #${lockerId}`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; padding: 20px;">
+      <h2>Smart Locker OTP Code</h2>
+      <p>Your new 6-digit PIN code to unlock Locker <b>#${lockerId}</b> is:</p>
+      <h1 style="color: #2563eb; letter-spacing: 5px; font-size: 36px;">${newPin}</h1>
+      <p>Please enter this code on the locker screen to retrieve your items.</p>
+    </div>
+  `;
 
+  const success = await sendEmail(locker.customerEmail, subject, html);
+
+  if (success) {
     console.log(`[OTP SENT] New PIN ${newPin} sent to ${locker.customerEmail}`);
     res.json({ success: true, message: 'OTP email sent successfully' });
-  } catch (error) {
-    console.error('[NODEMAILER ERROR]', error.message);
+  } else {
     res.status(500).json({ success: false, message: 'Failed to send email' });
   }
 });
