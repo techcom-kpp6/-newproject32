@@ -20,8 +20,8 @@ const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || 'your-app-password'
 
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
-  port: 465,
-  secure: true, // ใช้ SSL บน Port 465 เพื่อทะลุ Firewall ของ Render
+  port: 587,
+  secure: false, // ใช้ false สำหรับ Port 587
   auth: {
     user: GMAIL_USER,
     pass: GMAIL_APP_PASSWORD
